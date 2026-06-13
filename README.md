@@ -23,6 +23,7 @@ DropStream is a fast, secure, and decentralized peer-to-peer (P2P) file-sharing 
 Because the application uses a decoupled architecture, you must run both the frontend and backend servers.
 
 ### 1. Start the Signaling Backend
+
 ```bash
 cd backend
 npm install
@@ -46,5 +47,4 @@ npm run dev
 3. **P2P Connection**: A secure WebRTC connection is established. The signaling server's job is complete and it drops out of the equation.
 4. **Data Stream**: The Sender's browser reads the file as an `ArrayBuffer` and streams it over the `RTCDataChannel`. The Receiver's browser catches the stream and pipes it directly to disk via OPFS.
 
-## 📜 License
-MIT License
+
