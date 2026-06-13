@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { UploadCloud, Link as LinkIcon, CheckCircle2, AlertCircle, Download, Loader2, File as FileIcon } from 'lucide-react';
 
-const SOCKET_URL = 'http://localhost:3001';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const CHUNK_SIZE = 64 * 1024; 
 
 export default function App() {
