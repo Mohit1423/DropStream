@@ -18,6 +18,7 @@ export default function App() {
   const [fileInfo, setFileInfo] = useState<{ name: string, size: number, hash?: string } | null>(null);
   const fileInfoRef = useRef<{ name: string, size: number, hash?: string } | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [isTransferring, setIsTransferring] = useState<boolean>(false);
   
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -267,7 +268,12 @@ export default function App() {
         dataChannelRef.current.send(JSON.stringify({ type: 'done' }));
         setStatus('Transfer Complete!');
         setTransferSpeed('0');
+        setIsTransferring(false);
       }
+    };
+    reader.onerror = () => {
+      setStatus('Error reading file.');
+      setIsTransferring(false);
     };
     reader.readAsArrayBuffer(slice);
   };
@@ -299,6 +305,7 @@ export default function App() {
         
         if (currentInfo.hash && hash !== currentInfo.hash) {
           setStatus('Verification failed! File corruption detected.');
+          setIsTransferring(false);
           return;
         }
         setStatus('Verification passed! Saving file...');
@@ -320,10 +327,17 @@ export default function App() {
     } catch (e) {
       console.error(e);
       setStatus('Error retrieving file from local storage.');
+    } finally {
+      setIsTransferring(false);
     }
   };
 
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isTransferring) {
+      alert("A transfer is already in progress! Please wait until it completes before selecting a new file.");
+      return;
+    }
+    
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       
@@ -392,11 +406,12 @@ export default function App() {
         )}
 
         {isSender ? (
-          <div className="relative border-2 border-dashed border-slate-700 rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-colors hover:border-blue-500/50 bg-slate-900/50">
+          <div className={`relative border-2 border-dashed ${isTransferring ? 'border-slate-800 opacity-50 cursor-not-allowed' : 'border-slate-700 hover:border-blue-500/50 cursor-pointer'} rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-colors bg-slate-900/50`}>
             <input 
               type="file" 
               onChange={onFileSelect} 
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+              disabled={isTransferring}
             />
             <div className="p-4 bg-slate-800 rounded-full mb-4 text-blue-400">
               <FileIcon size={32} />
