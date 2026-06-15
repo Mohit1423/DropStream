@@ -164,9 +164,8 @@ export default function App() {
             receivedSizeRef.current = 0;
             setProgress(0);
             
-            (async () => {
+            writeQueueRef.current = writeQueueRef.current.then(async () => {
               try {
-                await writeQueueRef.current;
                 if (fileStreamRef.current) {
                   try { await fileStreamRef.current.close(); } catch(e) {}
                   fileStreamRef.current = null;
@@ -178,7 +177,7 @@ export default function App() {
                 console.error("OPFS init failed", e);
                 setStatus('Failed to initialize local storage for download.');
               }
-            })();
+            });
           } else if (meta.type === 'done') {
             handleDownload();
           }
@@ -222,6 +221,10 @@ export default function App() {
 
   const startTransfer = async () => {
     if (!fileRef.current || !dataChannelRef.current || dataChannelRef.current.readyState !== 'open') return;
+    
+    const transferId = Date.now();
+    currentTransferIdRef.current = transferId;
+    
     const file = fileRef.current;
     
     setIsTransferring(true);
@@ -229,8 +232,7 @@ export default function App() {
     const arrayBuffer = await file.arrayBuffer();
     const fileHash = await calculateHash(arrayBuffer);
     
-    const transferId = Date.now();
-    currentTransferIdRef.current = transferId;
+    if (currentTransferIdRef.current !== transferId) return;
     
     dataChannelRef.current.send(JSON.stringify({
       type: 'metadata',
