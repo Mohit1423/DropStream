@@ -26,6 +26,7 @@ export default function App() {
   
   const fileRef = useRef<File | null>(null);
   const offsetRef = useRef<number>(0);
+  const currentTransferIdRef = useRef<number>(0);
   
   const receivedSizeRef = useRef<number>(0);
   const fileStreamRef = useRef<FileSystemWritableFileStream | null>(null);
@@ -165,6 +166,11 @@ export default function App() {
             
             (async () => {
               try {
+                await writeQueueRef.current;
+                if (fileStreamRef.current) {
+                  try { await fileStreamRef.current.close(); } catch(e) {}
+                  fileStreamRef.current = null;
+                }
                 const root = await navigator.storage.getDirectory();
                 const fileHandle = await root.getFileHandle('dropstream_temp', { create: true });
                 fileStreamRef.current = await fileHandle.createWritable();
@@ -218,9 +224,13 @@ export default function App() {
     if (!fileRef.current || !dataChannelRef.current || dataChannelRef.current.readyState !== 'open') return;
     const file = fileRef.current;
     
+    setIsTransferring(true);
     setStatus(`Calculating file hash for verification...`);
     const arrayBuffer = await file.arrayBuffer();
     const fileHash = await calculateHash(arrayBuffer);
+    
+    const transferId = Date.now();
+    currentTransferIdRef.current = transferId;
     
     dataChannelRef.current.send(JSON.stringify({
       type: 'metadata',
@@ -233,16 +243,18 @@ export default function App() {
     offsetRef.current = 0;
     lastTimeRef.current = Date.now();
     lastBytesRef.current = 0;
-    readSlice();
+    readSlice(transferId);
   };
 
-  const readSlice = () => {
+  const readSlice = (transferId: number) => {
+    if (currentTransferIdRef.current !== transferId) return;
     if (!fileRef.current) return;
     const file = fileRef.current;
     const slice = file.slice(offsetRef.current, offsetRef.current + CHUNK_SIZE);
     
     const reader = new FileReader();
     reader.onload = async (e) => {
+      if (currentTransferIdRef.current !== transferId) return;
       if (!e.target?.result || !dataChannelRef.current) return;
       const buffer = e.target.result as ArrayBuffer;
       
@@ -260,9 +272,9 @@ export default function App() {
 
       if (offsetRef.current < file.size) {
         if (dataChannelRef.current.bufferedAmount > 1024 * 1024 * 5) {
-          setTimeout(readSlice, 50);
+          setTimeout(() => readSlice(transferId), 50);
         } else {
-          readSlice();
+          readSlice(transferId);
         }
       } else {
         dataChannelRef.current.send(JSON.stringify({ type: 'done' }));
@@ -272,6 +284,7 @@ export default function App() {
       }
     };
     reader.onerror = () => {
+      if (currentTransferIdRef.current !== transferId) return;
       setStatus('Error reading file.');
       setIsTransferring(false);
     };
@@ -333,11 +346,6 @@ export default function App() {
   };
 
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isTransferring) {
-      alert("A transfer is already in progress! Please wait until it completes before selecting a new file.");
-      return;
-    }
-    
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       
@@ -406,12 +414,11 @@ export default function App() {
         )}
 
         {isSender ? (
-          <div className={`relative border-2 border-dashed ${isTransferring ? 'border-slate-800 opacity-50 cursor-not-allowed' : 'border-slate-700 hover:border-blue-500/50 cursor-pointer'} rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-colors bg-slate-900/50`}>
+          <div className="relative border-2 border-dashed border-slate-700 hover:border-blue-500/50 cursor-pointer rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-colors bg-slate-900/50">
             <input 
               type="file" 
               onChange={onFileSelect} 
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-              disabled={isTransferring}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             <div className="p-4 bg-slate-800 rounded-full mb-4 text-blue-400">
               <FileIcon size={32} />
